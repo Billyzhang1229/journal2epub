@@ -22,6 +22,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import re
 import shutil
 import subprocess
@@ -30,7 +31,11 @@ from pathlib import Path
 
 log = logging.getLogger(__name__)
 
-SCRIPT = Path(__file__).resolve().parents[3] / "tools" / "math2svg.mjs"
+# Ships inside the package, not in the repo's tools/, so an installed copy can
+# still find it. Resolving it relative to the source tree works when running
+# from a checkout and silently breaks in site-packages, which degrades every
+# expression to fallback text without saying why.
+SCRIPT = Path(__file__).resolve().parent / "math2svg.mjs"
 BATCH = 400
 
 
@@ -69,6 +74,42 @@ class MathRenderer:
         if self.node is None:
             self.node = shutil.which("node")
 
+    # -- locating MathJax -------------------------------------------------
+    @staticmethod
+    def node_search_path() -> str:
+        """Where node should look for `mathjax-full`.
+
+        The script ships inside the package, so node's own resolution walks up
+        from site-packages and finds nothing. These candidates cover the usual
+        installs: an explicit override, the working directory, and a checkout.
+        """
+        candidates = [
+            os.environ.get("JOURNAL2EPUB_NODE_PATH", ""),
+            os.environ.get("NODE_PATH", ""),
+            str(Path.cwd() / "node_modules"),
+            str(Path(__file__).resolve().parents[3] / "node_modules"),
+        ]
+        return os.pathsep.join(p for p in candidates if p)
+
+    def diagnose(self) -> tuple[bool, str]:
+        """(usable, explanation) — so failures name their own fix."""
+        if not self.node:
+            return False, ("node was not found on PATH. Install Node.js, or "
+                           "rebuild later from a warm cache, which needs neither "
+                           "node nor MathJax.")
+        if not self.script.exists():
+            return False, f"the maths renderer script is missing: {self.script}"
+        probe = subprocess.run(
+            [self.node, "-e", "require.resolve('mathjax-full/js/mathjax.js')"],
+            capture_output=True, text=True,
+            env={**os.environ, "NODE_PATH": self.node_search_path()})
+        if probe.returncode != 0:
+            return False, ("node cannot resolve 'mathjax-full'. Run "
+                           "`npm install mathjax-full` in the directory you "
+                           "build from, or set JOURNAL2EPUB_NODE_PATH to a "
+                           "node_modules that contains it.")
+        return True, "node and MathJax are available"
+
     # -- keys ------------------------------------------------------------
     @staticmethod
     def key(source: str, display: bool, kind: str = "tex") -> str:
@@ -96,9 +137,10 @@ class MathRenderer:
             todo[k] = e
         if not todo:
             return
-        if not self.available():
-            log.warning("node/MathJax unavailable: %d expressions will fall back to TeX",
-                        len(todo))
+        usable, why = self.diagnose()
+        if not usable:
+            log.warning("%d maths expressions will be shown as their source "
+                        "instead of typeset: %s", len(todo), why)
             self.stats["unavailable"] += len(todo)
             return
 
@@ -114,7 +156,8 @@ class MathRenderer:
         try:
             proc = subprocess.run(
                 [self.node, str(self.script)], input=payload, capture_output=True,
-                text=True, timeout=600, check=False)
+                text=True, timeout=600, check=False,
+                env={**os.environ, "NODE_PATH": self.node_search_path()})
         except (OSError, subprocess.TimeoutExpired) as e:
             log.error("maths renderer failed to run: %s", e)
             self.stats["unavailable"] += len(items)

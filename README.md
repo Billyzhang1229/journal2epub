@@ -6,12 +6,6 @@ contents grouped into parts, article-type framing, figures and tables in place,
 working citation links in both directions, and the journal's own visual
 character.
 
-```bash
-journal2epub build gigascience --volume 12 --contact you@example.org
-journal2epub build plos-computational-biology --volume 22 --issue 5 \
-  --contact you@example.org
-```
-
 ```
 build/gigascience-v12.epub
   included : 112 of 113
@@ -22,6 +16,97 @@ build/gigascience-v12.epub
 Editions are **unofficial and independently produced**. They carry no publisher
 logo or trade dress, and every article carries its authors, original citation,
 identifier and licence.
+
+## Install
+
+Needs **Python ≥3.11** and **Node.js** (Node only for typesetting mathematics —
+see below).
+
+```bash
+git clone https://github.com/Billyzhang1229/journal2epub.git
+cd journal2epub
+uv sync                     # or: python -m venv .venv && .venv/bin/pip install -e .
+npm install mathjax-full    # typesets the mathematics
+```
+
+Then check the install before spending time on a build:
+
+```bash
+uv run journal2epub doctor
+```
+
+```
+journal2epub 0.1.0
+  ok    python   3.13.9
+  ok    journals configured   gigascience, plos-computational-biology
+  ok    themes configured   gigascience, plos
+  ok    themes pass contrast
+  ok    maths renderer   node and MathJax are available
+  ok    contact address   you@example.org
+  info  cache: 0 cached responses at .cache/journal2epub
+```
+
+`doctor` exits non-zero if anything is wrong and tells you the fix.
+
+<details>
+<summary>Installing as a tool rather than from a checkout</summary>
+
+`pip install .` and `uv tool install .` both work. The maths renderer ships
+inside the package, but Node still has to be able to find MathJax, so either run
+`npm install mathjax-full` in the directory you build from, or point at an
+existing install:
+
+```bash
+export JOURNAL2EPUB_NODE_PATH=/path/to/node_modules
+```
+
+`journal2epub doctor` will tell you which of these you need.
+</details>
+
+## Use
+
+Set a contact address once. The data providers ask clients to identify
+themselves, and Crossref gives politely-identified clients a faster pool:
+
+```bash
+export JOURNAL2EPUB_CONTACT=you@example.org
+```
+
+Build a volume, or a single issue for journals that publish them:
+
+```bash
+journal2epub list                                     # what's configured
+journal2epub build gigascience --volume 12
+journal2epub build plos-computational-biology --volume 22 --issue 5
+```
+
+Each build writes two files — the edition and a machine-readable report
+accounting for **every** article the registry lists, including the ones that
+could not be included and why:
+
+```bash
+journal2epub summary gigascience-v12.report.json
+```
+
+A first build of a full volume downloads a few hundred megabytes and takes
+roughly 10–20 minutes, most of it fetching figures. Everything is cached, so
+building the same volume again takes about a minute, makes **zero** network
+requests, and produces a byte-identical file. `--offline` refuses to touch the
+network at all, which is how that claim is proved.
+
+If a build is interrupted, run the same command again — it resumes from where
+it stopped rather than starting over.
+
+### Options worth knowing
+
+| | |
+|---|---|
+| `--issue N` | for journals publishing discrete issues; omit for volume-only journals |
+| `--offline` | serve only from cache, never touch the network |
+| `--retry-failed` | re-queue articles that failed on an earlier run |
+| `--fresh` | discard build state and start the volume over |
+| `--limit N` | resolve only the first N articles (for a quick trial) |
+| `--out PATH` | output path; defaults to `<journal>-v<volume>.epub` |
 
 ## How it gets the text
 
@@ -65,34 +150,21 @@ which were latent defects in shared machinery that the first journal's shape had
 hidden. That is written up honestly in
 [ADR 5](docs/adr/0005-adapting-to-a-second-journal.md).
 
-## Usage
-
-```bash
-journal2epub build <journal> --volume <n> [--issue <n>] [options]
-journal2epub list                      # configured journals and themes
-journal2epub summary <report.json>     # read a build report
-```
-
-Use `--issue` for journals that publish discrete issues; omit it for those
-numbered only by volume. Other useful options: `--offline` (serve only from
-cache, proving reproducibility), `--retry-failed`, `--fresh`, `--limit N`, and
-`--contact` (identifies the client to the data providers, as their terms ask).
-
-## Requirements
-
-Python ≥3.11. A cold build also needs `node` and `mathjax-full` to typeset
-mathematics (`npm install mathjax-full`); a warm rebuild needs neither, because
-rendered expressions are cached. `epubcheck` and `@daisy/ace` are only needed to
-run the validators.
-
 ## Verifying a build
 
+The three checks the project holds itself to. `epubcheck` and `@daisy/ace` are
+external and only needed for this:
+
 ```bash
-epubcheck build/gigascience-v12.epub
-npx @daisy/ace -o ace-out build/gigascience-v12.epub
+epubcheck build/gigascience-v12.epub                    # must be 0 errors
+npx @daisy/ace -o ace-out build/gigascience-v12.epub    # must be 0 violations
 uv run python tools/check_reflow.py build/gigascience-v12.epub
 uv run pytest
 ```
+
+`check_reflow.py` renders every page at four device widths and fails if any page
+scrolls sideways; it needs `uv pip install playwright && playwright install
+chromium`.
 
 ## Reader testing
 

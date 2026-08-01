@@ -89,6 +89,56 @@ def list_() -> None:
 
 
 @main.command()
+@click.option("--cache", type=click.Path(path_type=Path), default=DEFAULT_CACHE,
+              show_default=True)
+def doctor(cache: Path) -> None:
+    """Check that everything a build needs is present."""
+    from .render.math import MathRenderer
+
+    ok = True
+
+    def line(label: str, good: bool, detail: str = "") -> None:
+        nonlocal ok
+        ok = ok and good
+        click.secho(f"  {'ok  ' if good else 'FAIL'}  {label}",
+                    fg="green" if good else "red", nl=False)
+        click.echo(f"   {detail}" if detail else "")
+
+    click.echo(f"journal2epub {__version__}")
+    line("python", sys.version_info >= (3, 11), sys.version.split()[0])
+
+    journals = available("journals")
+    line("journals configured", bool(journals), ", ".join(journals) or "none")
+    themes = available("themes")
+    line("themes configured", bool(themes), ", ".join(themes) or "none")
+
+    bad_themes = []
+    for k in themes:
+        try:
+            load_theme(k)
+        except ValueError as e:
+            bad_themes.append(f"{k}: {e}".split("\n")[0])
+    line("themes pass contrast", not bad_themes, "; ".join(bad_themes))
+
+    usable, why = MathRenderer(cache_dir=Path(cache) / "math").diagnose()
+    line("maths renderer", usable, why)
+
+    contact = os.environ.get("JOURNAL2EPUB_CONTACT", "")
+    line("contact address", bool(contact),
+         contact or "unset — set JOURNAL2EPUB_CONTACT so the data providers "
+                    "can identify this client, as their terms ask")
+
+    n = len(list(Path(cache).rglob("*.body"))) if Path(cache).exists() else 0
+    click.echo(f"  info  cache: {n} cached responses at {cache}")
+
+    if not usable:
+        click.echo("\nA build will still run without the maths renderer, but "
+                   "every expression will be shown as its source instead of "
+                   "typeset, and the report will say so.")
+    raise SystemExit(0 if ok else 1)
+
+
+@main.command()
 @click.argument("report", type=click.Path(exists=True, path_type=Path))
 def summary(report: Path) -> None:
     """Summarise a build report."""

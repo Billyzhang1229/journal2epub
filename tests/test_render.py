@@ -407,3 +407,35 @@ def test_journal_keys_are_derived_from_their_titles():
         assert key == expected, (
             f"journal key {key!r} is not derived from its title "
             f"{j.title!r}; expected {expected!r}")
+
+
+# -- packaging ---------------------------------------------------------
+
+def test_maths_script_ships_inside_the_package():
+    """Resolving the script relative to the source tree works from a checkout
+    and breaks in site-packages, which silently degrades every expression to
+    fallback text. It has to travel with the package."""
+    from journal2epub.render import math as math_mod
+    assert math_mod.SCRIPT.exists(), math_mod.SCRIPT
+    pkg_root = Path(math_mod.__file__).resolve().parent
+    assert math_mod.SCRIPT.is_relative_to(pkg_root), (
+        f"{math_mod.SCRIPT} is outside the installed package at {pkg_root}")
+
+
+def test_packaged_data_files_are_reachable():
+    """Journal and theme descriptors are package data; if they are not included
+    the tool installs cleanly and then knows about no journals at all."""
+    from journal2epub.config import available
+    assert "gigascience" in available("journals")
+    assert "gigascience" in available("themes")
+
+
+def test_math_diagnosis_explains_itself(tmp_path):
+    """A build that cannot typeset must say why and how to fix it, not just
+    report a lower number."""
+    # `node=None` means "discover it"; an empty string means "there is none".
+    r = MathRenderer(cache_dir=tmp_path / "m", node="")
+    usable, why = r.diagnose()
+    assert usable is False
+    assert "node" in why.lower()
+    assert len(why) > 30, "the explanation should name a fix"
