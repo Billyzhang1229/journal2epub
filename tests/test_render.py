@@ -391,3 +391,19 @@ def test_expression_with_no_source_is_counted_as_fallback(journal, theme, tmp_pa
     html = r.render()
     assert r.stats.math_fallback == 1
     assert "math-fallback" in html and "q" in html
+
+
+# -- naming convention -------------------------------------------------
+
+def test_journal_keys_are_derived_from_their_titles():
+    """The key is a lookup, never shown to a reader, so it should cost nothing
+    to guess: lowercase the title and hyphenate the gaps. Invented contractions
+    make the key set look arbitrary."""
+    import re
+    from journal2epub.config import available
+    for key in available("journals"):
+        j = load_journal(key)
+        expected = re.sub(r"[^a-z0-9]+", "-", j.title.lower()).strip("-")
+        assert key == expected, (
+            f"journal key {key!r} is not derived from its title "
+            f"{j.title!r}; expected {expected!r}")

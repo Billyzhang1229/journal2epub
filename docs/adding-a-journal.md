@@ -22,6 +22,34 @@ The `nlm_ta` value is PMC's own abbreviation (`Gigascience`, not
 
 ## 2. Write the journal descriptor
 
+### Naming the key
+
+The key is the filename and the word you type on the command line. Derive it
+mechanically from the journal's full title: lowercase it, and replace each run
+of non-alphanumeric characters with a single hyphen.
+
+| Title | Key |
+|---|---|
+| GigaScience | `gigascience` |
+| PLOS Computational Biology | `plos-computational-biology` |
+
+Resist the temptation to invent a contraction. `ploscompbiol` is shorter and is
+even PLOS's own URL slug, but a reader of the repository cannot derive it from
+the title, and it makes the key set look arbitrary next to `gigascience`. The
+key is only a lookup — it never reaches the reader — so it should cost nothing
+to guess.
+
+### The three names, which are all different
+
+A journal descriptor carries three names because they genuinely differ, and
+mixing them up is a good way to get a zero-result cross-check:
+
+* `title` — the full name. This is what appears on the cover, the title page,
+  the EPUB metadata and every article's citation line.
+* `nlm_ta` — PMC's own abbreviation (`PLoS Comput Biol`, `Gigascience`). Used
+  *only* for the esearch cross-check count; PMC will not match the full title.
+* the key — the command-line handle, as above.
+
 `src/journal2epub/data/journals/<key>.toml`:
 
 ```toml

@@ -8,7 +8,8 @@ character.
 
 ```bash
 journal2epub build gigascience --volume 12 --contact you@example.org
-journal2epub build ploscompbiol --volume 22 --issue 5 --contact you@example.org
+journal2epub build plos-computational-biology --volume 22 --issue 5 \
+  --contact you@example.org
 ```
 
 ```

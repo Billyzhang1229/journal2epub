@@ -77,10 +77,12 @@ def build(journal: str, volume: str, issue: str, out: Path | None, contact: str,
 @main.command("list")
 def list_() -> None:
     """List the journals and themes that are configured."""
+    keys = available("journals")
+    width = max((len(k) for k in keys), default=0)
     click.echo("journals:")
-    for k in available("journals"):
+    for k in keys:
         j = load_journal(k)
-        click.echo(f"  {k:16} {j.title} ({j.issn}) — theme: {j.theme}")
+        click.echo(f"  {k:<{width}}  {j.title} ({j.issn}) — theme: {j.theme}")
     click.echo("themes:")
     for k in available("themes"):
         click.echo(f"  {k}")

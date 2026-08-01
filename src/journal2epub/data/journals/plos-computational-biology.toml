@@ -12,7 +12,7 @@ furthers biological understanding through computation, across all scales of \
 biological organisation."""
 
 # PLOS publishes discrete monthly issues, so editions are built per issue:
-#   journal2epub build ploscompbiol --volume 22 --issue 5
+#   journal2epub build plos-computational-biology --volume 22 --issue 5
 # Parts follow PLOS's own article-type headings.
 [[section]]
 name = "Research Articles"
