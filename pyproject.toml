@@ -1,0 +1,29 @@
+[project]
+name = "journal2epub"
+version = "0.1.0"
+description = "Offline reading editions of open-access journals, built from structured full text"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "lxml>=5.2",
+    "httpx>=0.27",
+    "jinja2>=3.1",
+    "click>=8.1",
+    "pillow>=10.3",
+]
+
+[project.scripts]
+journal2epub = "journal2epub.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8.2"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/journal2epub"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

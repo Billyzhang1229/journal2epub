@@ -1,0 +1,39 @@
+[theme]
+name = "PLOS"
+
+# PLOS's editorial character is quieter and more utilitarian than GigaScience's:
+# a warm orange accent, near-black text, hairline rules, and a sans-serif
+# heading face over a serif text face. Editorial identity, not a facsimile.
+# The accent is deliberately darker than PLOS's own web orange: at #c8531a it
+# scores 4.46:1 on white and fails WCAG AA by a hundredth, which `load_theme`
+# now refuses. #b8480f keeps the character at 5.29:1.
+accent = "#b8480f"
+accent_dark = "#f08a55"
+rule = "#d6d1cc"
+muted = "#5f5a55"
+ink = "#1a1a1a"
+paper = "#ffffff"
+
+# No web fonts anywhere: nothing to licence, nothing to embed, nothing that
+# fails to load on a device with a fixed font list.
+serif_stack = "'Iowan Old Style', Palatino, 'Palatino Linotype', Georgia, serif"
+sans_stack = "'Helvetica Neue', Helvetica, 'Segoe UI', Roboto, Arial, sans-serif"
+mono_stack = "'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace"
+body_family = "serif"
+heading_family = "sans"
+
+base_size = "1em"
+line_height = "1.5"
+scale = ["1.55em", "1.25em", "1.08em", "1em"]
+
+label_transform = "uppercase"
+label_letterspacing = "0.08em"
+label_weight = "700"
+label_size = "0.7em"
+
+rule_weight = "1px"
+heavy_rule_weight = "2px"
+
+cover_bg = "#ffffff"
+cover_fg = "#1a1a1a"
+cover_accent = "#b8480f"

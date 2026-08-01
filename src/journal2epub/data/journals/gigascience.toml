@@ -1,0 +1,60 @@
+[journal]
+title = "GigaScience"
+issn = "2047-217X"
+publisher = "Oxford University Press"
+nlm_ta = "Gigascience"
+source = "pmc_jats"
+theme = "gigascience"
+homepage = "https://academic.oup.com/gigascience"
+description = """
+GigaScience publishes research across the life and biomedical sciences with an \
+emphasis on large-scale data, reproducibility, and the tools and resources that \
+make both possible."""
+
+# Article types the volume TOC groups by, in the order the parts appear.
+[[section]]
+name = "Research"
+types = ["research-article"]
+order = 10
+
+[[section]]
+name = "Data Notes"
+subjects = ["Data Note", "Data Notes", "Datanote"]
+order = 20
+
+[[section]]
+name = "Technical Notes"
+subjects = ["Technical Note", "Technical Notes", "Tech Note"]
+order = 30
+
+[[section]]
+name = "Reviews"
+types = ["review-article"]
+subjects = ["Review", "Reviews"]
+order = 40
+
+[[section]]
+name = "Commentary"
+types = ["editorial", "article-commentary", "letter", "discussion"]
+subjects = ["Commentary", "Editorial", "Letter", "Perspective", "Opinion"]
+order = 50
+
+[[section]]
+name = "Corrections"
+types = ["correction", "retraction"]
+subjects = ["Correction", "Erratum", "Corrigendum"]
+order = 90
+
+# How each article type is labelled in the reader.
+[type_labels]
+research-article = "Research"
+review-article = "Review"
+editorial = "Editorial"
+article-commentary = "Commentary"
+letter = "Letter"
+correction = "Correction"
+retraction = "Retraction"
+data-paper = "Data Note"
+brief-report = "Brief Report"
+discussion = "Discussion"
+other = "Article"

@@ -1,0 +1,38 @@
+[theme]
+name = "GigaScience"
+
+# Editorial identity, not a facsimile. Reflowable EPUB hands font, size and
+# margins to the reader, so pixel fidelity with the website is neither possible
+# nor worth chasing; what carries over is the journal's editorial character.
+# Colours are chosen to stay legible when a device renders them as greyscale.
+accent = "#00707f"
+accent_dark = "#4fc3cf"
+rule = "#c9d4d6"
+muted = "#5b6a6d"
+ink = "#12191a"
+paper = "#ffffff"
+
+# No web fonts anywhere: nothing to licence, nothing to embed, and nothing that
+# fails to load on a device with a fixed font list. These stacks name faces that
+# e-readers actually ship, and degrade to the generic family everywhere else.
+serif_stack = "Charter, 'Bitstream Charter', 'Iowan Old Style', Georgia, 'Times New Roman', serif"
+sans_stack = "'Helvetica Neue', Helvetica, 'Segoe UI', Roboto, Arial, sans-serif"
+mono_stack = "'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace"
+body_family = "serif"
+heading_family = "sans"
+
+base_size = "1em"
+line_height = "1.55"
+scale = ["1.6em", "1.28em", "1.1em", "1em"]
+
+label_transform = "uppercase"
+label_letterspacing = "0.1em"
+label_weight = "700"
+label_size = "0.72em"
+
+rule_weight = "1px"
+heavy_rule_weight = "3px"
+
+cover_bg = "#12191a"
+cover_fg = "#ffffff"
+cover_accent = "#4fc3cf"

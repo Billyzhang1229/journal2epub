@@ -1,0 +1,59 @@
+[journal]
+title = "PLOS Computational Biology"
+issn = "1553-7358"
+publisher = "Public Library of Science"
+nlm_ta = "PLoS Comput Biol"
+source = "pmc_jats"
+theme = "plos"
+homepage = "https://journals.plos.org/ploscompbiol/"
+description = """
+PLOS Computational Biology publishes work of exceptional significance that \
+furthers biological understanding through computation, across all scales of \
+biological organisation."""
+
+# PLOS publishes discrete monthly issues, so editions are built per issue:
+#   journal2epub build ploscompbiol --volume 22 --issue 5
+# Parts follow PLOS's own article-type headings.
+[[section]]
+name = "Research Articles"
+subjects = ["Research Article"]
+order = 10
+
+[[section]]
+name = "Software"
+subjects = ["Software"]
+order = 20
+
+[[section]]
+name = "Methods"
+subjects = ["Methods"]
+order = 30
+
+[[section]]
+name = "Reviews"
+types = ["review-article"]
+subjects = ["Review", "Topic Page", "Education"]
+order = 40
+
+[[section]]
+name = "Perspectives and Editorials"
+types = ["editorial", "article-commentary", "letter", "discussion", "other"]
+subjects = ["Editorial", "Perspective", "Opinion", "Formal Comment",
+            "Message from ISCB", "Obituary", "Community Page", "Essay"]
+order = 50
+
+[[section]]
+name = "Corrections"
+types = ["correction", "retraction", "expression-of-concern"]
+subjects = ["Correction", "Retraction", "Expression of Concern"]
+order = 90
+
+[type_labels]
+research-article = "Research Article"
+review-article = "Review"
+editorial = "Editorial"
+article-commentary = "Perspective"
+letter = "Letter"
+correction = "Correction"
+retraction = "Retraction"
+other = "Article"

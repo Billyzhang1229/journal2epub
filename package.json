@@ -1,0 +1,10 @@
+{
+  "name": "journal2epub-math",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pins MathJax for journal2epub's offline maths renderer (tools/math2svg.mjs). Not a published package; the tool itself is Python.",
+  "license": "MIT",
+  "dependencies": {
+    "mathjax-full": "^3.2.2"
+  }
+}

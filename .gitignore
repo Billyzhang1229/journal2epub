@@ -1,0 +1,34 @@
+# Built publications — never committed.
+# An edition is 35-50 MB of third-party, separately licensed article content.
+# It is a build product, not source, and `journal2epub build` reproduces it
+# byte-identically from the cache.
+build/
+*.epub
+*.report.json
+ace-out/
+
+# Durable caches and resumable build state
+.cache/
+.build/
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Node. `package-lock.json` is deliberately NOT ignored: it pins the MathJax
+# version, and a different MathJax renders different SVG, which would break the
+# byte-identical rebuild guarantee across machines. Same reasoning for uv.lock.
+node_modules/
+
+# Local editor and tooling scratch
+.claude/
+.idea/
+.vscode/
+
+# macOS
+.DS_Store
