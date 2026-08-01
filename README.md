@@ -88,14 +88,25 @@ could not be included and why:
 journal2epub summary gigascience-v12.report.json
 ```
 
+A build reports what it is doing as it goes:
+
+```
+  ✓ Discovering GigaScience volume 12 in 3s
+  ✓ Resolving articles (113/113) in 4m12s
+  ✓ Typesetting mathematics (1064/1064) in 18s
+    Fetching figures and rendering   ███████████·············   52/112  46%  ~5m left
+```
+
 A first build of a full volume downloads a few hundred megabytes and takes
 roughly 10–20 minutes, most of it fetching figures. Everything is cached, so
 building the same volume again takes about a minute, makes **zero** network
 requests, and produces a byte-identical file. `--offline` refuses to touch the
 network at all, which is how that claim is proved.
 
-If a build is interrupted, run the same command again — it resumes from where
-it stopped rather than starting over.
+If a build is interrupted, run the same command again — it says how much it is
+resuming and picks up from there rather than starting over. Piped to a log file
+the progress becomes plain periodic lines instead of a redrawn bar; `--quiet`
+turns it off entirely.
 
 ### Options worth knowing
 
@@ -106,6 +117,7 @@ it stopped rather than starting over.
 | `--retry-failed` | re-queue articles that failed on an earlier run |
 | `--fresh` | discard build state and start the volume over |
 | `--limit N` | resolve only the first N articles (for a quick trial) |
+| `--quiet` | no progress output |
 | `--out PATH` | output path; defaults to `<journal>-v<volume>.epub` |
 
 ## How it gets the text

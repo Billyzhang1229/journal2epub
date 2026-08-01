@@ -124,15 +124,21 @@ class MathRenderer:
     def available(self) -> bool:
         return bool(self.node) and self.script.exists()
 
-    def prepare(self, exprs: list[Expr]) -> None:
+    def prepare(self, exprs: list[Expr], on_progress=None) -> None:
         """Render every expression not already cached, in as few node runs as
-        possible. Call once per build before rendering pages."""
+        possible. Call once per build before rendering pages.
+
+        `on_progress(n)` is called with the number of expressions accounted for
+        so far, including the ones already cached, so a caller can show a bar
+        that reaches the end rather than stalling at the cached count."""
+        tick = on_progress or (lambda _n=1: None)
         todo: dict[str, Expr] = {}
         for e in exprs:
             if not e.source:
                 continue
             k = self.key(e.source, e.display, e.kind)
             if k in self._mem or self._path(k).exists():
+                tick(1)                      # already cached; still progress
                 continue
             todo[k] = e
         if not todo:
@@ -142,12 +148,15 @@ class MathRenderer:
             log.warning("%d maths expressions will be shown as their source "
                         "instead of typeset: %s", len(todo), why)
             self.stats["unavailable"] += len(todo)
+            tick(len(todo))
             return
 
         items = list(todo.items())
         log.info("rendering %d maths expressions", len(items))
         for i in range(0, len(items), BATCH):
-            self._run_batch(items[i:i + BATCH])
+            batch = items[i:i + BATCH]
+            self._run_batch(batch)
+            tick(len(batch))
 
     def _run_batch(self, items: list[tuple[str, "Expr"]]) -> None:
         payload = "\n".join(

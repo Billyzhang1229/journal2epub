@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import sys
+import time
 from pathlib import Path
 
 import click
@@ -19,6 +20,120 @@ DEFAULT_CACHE = Path(os.environ.get("JOURNAL2EPUB_CACHE", ".cache/journal2epub")
 def _setup_logging(verbose: int) -> None:
     level = logging.WARNING if verbose == 0 else logging.INFO if verbose == 1 else logging.DEBUG
     logging.basicConfig(level=level, format="%(levelname)-7s %(message)s", stream=sys.stderr)
+    # httpx logs a line per request at INFO. On a volume build that is thousands
+    # of lines and buries everything worth reading.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+
+
+class TerminalProgress:
+    """Live progress on stderr.
+
+    On a terminal this is one redrawn line per phase. Piped to a file or a CI
+    log it becomes occasional plain lines instead, because a few thousand
+    carriage returns in a log file help nobody.
+    """
+
+    def __init__(self, stream=None, tty: bool | None = None) -> None:
+        self.stream = stream or sys.stderr
+        self.tty = self.stream.isatty() if tty is None else tty
+        self.label = ""
+        self.total: int | None = None
+        self.done = 0
+        self.started = 0.0
+        self._last_draw = 0.0
+        self._last_logged_pct = -1
+
+    # -- Progress protocol ------------------------------------------------
+    def phase(self, label: str, total: int | None = None) -> None:
+        self._finish_line()
+        self.label, self.total, self.done = label, total, 0
+        self.started = self._last_draw = time.monotonic()
+        self._last_logged_pct = -1
+        if self.total is None:
+            self._write(f"{label}…" + ("\n" if not self.tty else ""))
+        else:
+            self._draw(force=True)
+
+    def advance(self, n: int = 1) -> None:
+        self.done += n
+        self._draw()
+
+    def note(self, message: str) -> None:
+        self._clear()
+        self._write(f"  {message}\n")
+        self._draw(force=True)
+
+    def close(self) -> None:
+        self._finish_line()
+
+    # -- rendering --------------------------------------------------------
+    def _draw(self, force: bool = False) -> None:
+        now = time.monotonic()
+        if not force and now - self._last_draw < 0.1:
+            return          # redrawing faster than anyone can read wastes IO
+        self._last_draw = now
+        if self.total is None:
+            return
+        pct = int(100 * self.done / self.total) if self.total else 100
+
+        if not self.tty:
+            # Not a terminal: a line every 10%, no control characters.
+            if pct // 10 > self._last_logged_pct // 10 or self.done >= self.total:
+                self._last_logged_pct = pct
+                self._write(f"{self.label}: {self.done}/{self.total} ({pct}%)\n")
+            return
+
+        width = 24
+        filled = int(width * self.done / self.total) if self.total else width
+        bar = "█" * filled + "·" * (width - filled)
+        elapsed = now - self.started
+        eta = ""
+        if self.done and self.done < self.total and elapsed > 2:
+            remaining = elapsed / self.done * (self.total - self.done)
+            eta = f"  ~{_duration(remaining)} left"
+        self._clear()
+        self._write(f"  {self.label:<32} {bar} {self.done:>4}/{self.total}"
+                    f" {pct:>3}%{eta}")
+
+    def _finish_line(self) -> None:
+        """Every phase ends with a completion line.
+
+        Without this the redraw throttle can swallow the last update, so a
+        phase appears to stop at 96% and the next one starts — which reads
+        exactly like something went wrong."""
+        if not self.label:
+            return
+        took = _duration(time.monotonic() - self.started)
+        # Report what actually happened rather than asserting 100%: a phase can
+        # legitimately end with fewer items than it started with.
+        count = f" ({self.done}/{self.total})" if self.total else ""
+        if self.tty:
+            self._clear()
+            self._write(f"  ✓ {self.label}{count} in {took}\n")
+        else:
+            self._write(f"{self.label}: done{count} in {took}\n")
+        self.label = ""
+
+    def _clear(self) -> None:
+        if self.tty:
+            self._write("\r\033[2K")
+
+    def _write(self, s: str) -> None:
+        try:
+            self.stream.write(s)
+            self.stream.flush()
+        except (ValueError, OSError):
+            pass
+
+
+def _duration(seconds: float) -> str:
+    seconds = max(0, int(seconds))
+    if seconds < 60:
+        return f"{seconds}s"
+    if seconds < 3600:
+        return f"{seconds // 60}m{seconds % 60:02d}s"
+    return f"{seconds // 3600}h{(seconds % 3600) // 60:02d}m"
 
 
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
@@ -47,10 +162,11 @@ def main() -> None:
 @click.option("--limit", type=int, default=0, help="Only resolve the first N articles.")
 @click.option("--retry-failed", is_flag=True, help="Re-queue articles that failed before.")
 @click.option("--fresh", is_flag=True, help="Discard build state and start over.")
+@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output.")
 @click.option("-v", "--verbose", count=True)
 def build(journal: str, volume: str, issue: str, out: Path | None, contact: str,
           cache: Path, work: Path, offline: bool, limit: int, retry_failed: bool,
-          fresh: bool, verbose: int) -> None:
+          fresh: bool, quiet: bool, verbose: int) -> None:
     """Build one volume — or one issue — of JOURNAL into a single EPUB."""
     _setup_logging(verbose)
     if not contact:
@@ -60,11 +176,13 @@ def build(journal: str, volume: str, issue: str, out: Path | None, contact: str,
             err=True)
     suffix = f"v{volume}" + (f"i{issue}" if issue else "")
     out = out or Path(f"{journal}-{suffix}.epub")
+    from .build import NullProgress
+    progress = NullProgress() if quiet else TerminalProgress()
     res = build_volume(BuildOptions(
         journal_key=journal, volume=volume, issue=issue, out=out,
         cache_dir=cache, work_dir=work,
         contact=contact, offline=offline, limit=limit, retry_failed=retry_failed,
-        fresh=fresh))
+        fresh=fresh), progress=progress)
 
     click.echo(f"\n{res.epub}")
     click.echo(f"  included : {res.included} of {res.registry_count}")

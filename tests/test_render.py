@@ -439,3 +439,58 @@ def test_math_diagnosis_explains_itself(tmp_path):
     assert usable is False
     assert "node" in why.lower()
     assert len(why) > 30, "the explanation should name a fix"
+
+
+# -- build progress ----------------------------------------------------
+
+def test_progress_reports_every_phase_to_completion(tmp_path):
+    """A phase that stops short of its total reads as a failure, so each one
+    must emit a completion line even when the redraw throttle swallows the
+    last update."""
+    import io
+    from journal2epub.cli import TerminalProgress
+    buf = io.StringIO()
+    p = TerminalProgress(stream=buf, tty=False)
+    p.phase("Resolving articles", total=3)
+    for _ in range(3):
+        p.advance()
+    p.phase("Writing EPUB")
+    p.close()
+    out = buf.getvalue()
+    assert "Resolving articles: done (3/3)" in out, out
+    assert "Writing EPUB" in out
+
+
+def test_progress_reports_actual_count_not_an_assumed_100_percent(tmp_path):
+    """A phase can legitimately end with fewer items than it started with;
+    claiming 100% would hide that."""
+    import io
+    from journal2epub.cli import TerminalProgress
+    buf = io.StringIO()
+    p = TerminalProgress(stream=buf, tty=False)
+    p.phase("Resolving articles", total=10)
+    p.advance(4)
+    p.close()
+    assert "done (4/10)" in buf.getvalue()
+
+
+def test_progress_writes_no_control_characters_when_not_a_terminal(tmp_path):
+    """Piped to a log file, thousands of carriage returns help nobody."""
+    import io
+    from journal2epub.cli import TerminalProgress
+    buf = io.StringIO()
+    p = TerminalProgress(stream=buf, tty=False)
+    p.phase("Fetching", total=100)
+    for _ in range(100):
+        p.advance()
+    p.close()
+    out = buf.getvalue()
+    assert "\r" not in out and "\033" not in out
+
+
+def test_null_progress_satisfies_the_protocol():
+    """--quiet and library use must not need a terminal."""
+    from journal2epub.build import NullProgress, Progress
+    n = NullProgress()
+    assert isinstance(n, Progress)
+    n.phase("x", total=1); n.advance(); n.note("y"); n.close()

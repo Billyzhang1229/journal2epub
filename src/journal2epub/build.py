@@ -14,6 +14,7 @@ import logging
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Protocol, runtime_checkable
 
 from . import __version__
 from .config import JournalConfig, Theme, load_journal, load_theme
@@ -28,6 +29,44 @@ from .state import BuildState
 log = logging.getLogger(__name__)
 
 SOURCES = {"pmc_jats": PmcJatsSource}
+
+
+@runtime_checkable
+class Progress(Protocol):
+    """How a build reports what it is doing.
+
+    A cold volume build runs for ten to twenty minutes, most of it fetching
+    figures. Without this it is indistinguishable from a hang. The protocol
+    lives here so `build.py` stays free of any particular UI.
+    """
+
+    def phase(self, label: str, total: int | None = None) -> None:
+        """Begin a named stage, with an item count where one is known."""
+
+    def advance(self, n: int = 1) -> None:
+        """Report progress within the current phase."""
+
+    def note(self, message: str) -> None:
+        """Something worth surfacing without interrupting the phase."""
+
+    def close(self) -> None:
+        """Finish; leave the terminal tidy."""
+
+
+class NullProgress:
+    """Default, for library use and tests: says nothing."""
+
+    def phase(self, label: str, total: int | None = None) -> None:
+        pass
+
+    def advance(self, n: int = 1) -> None:
+        pass
+
+    def note(self, message: str) -> None:
+        pass
+
+    def close(self) -> None:
+        pass
 
 
 @dataclass
@@ -57,7 +96,8 @@ class BuildResult:
     counts: dict = field(default_factory=dict)
 
 
-def build_volume(opts: BuildOptions) -> BuildResult:
+def build_volume(opts: BuildOptions, progress: Progress | None = None) -> BuildResult:
+    progress = progress or NullProgress()
     journal = load_journal(opts.journal_key)
     theme = load_theme(journal.theme)
     slug = f"{opts.journal_key}-v{opts.volume}" + (f"i{opts.issue}" if opts.issue else "")
@@ -81,6 +121,9 @@ def build_volume(opts: BuildOptions) -> BuildResult:
     with fetcher, state:
         # -- discovery (once) ------------------------------------------
         if not state.discovered:
+            progress.phase(f"Discovering {journal.title} "
+                           f"volume {opts.volume}"
+                           + (f" issue {opts.issue}" if opts.issue else ""))
             log.info("discovering %s volume %s%s", journal.title, opts.volume,
                      f" issue {opts.issue}" if opts.issue else "")
             stubs = source.discover(journal, opts.volume, opts.issue)
@@ -97,8 +140,16 @@ def build_volume(opts: BuildOptions) -> BuildResult:
 
         # -- resolve every article -------------------------------------
         pending = state.pending()
+        # Count what an earlier run already finished *before* --limit truncates
+        # the queue, or a limited fresh build claims to be resuming work that
+        # was never done.
+        already = info.get("registry_count", 0) - len(pending)
         if opts.limit:
             pending = pending[:opts.limit]
+        if pending:
+            progress.phase("Resolving articles", total=len(pending))
+            if already > 0:
+                progress.note(f"resuming: {already} already resolved")
         for i, rec in enumerate(pending, 1):
             stub = ArticleStub(**rec.stub)
             try:
@@ -117,6 +168,7 @@ def build_volume(opts: BuildOptions) -> BuildResult:
             unh = [dataclasses.asdict(u) for u in (out.article.unhandled if out.article else [])]
             state.record_outcome(rec.doi, out.resolution, note=out.note,
                                  provenance=prov, unhandled=unh)
+            progress.advance()
             if i % 20 == 0 or i == len(pending):
                 log.info("resolved %d/%d", i, len(pending))
 
@@ -132,7 +184,9 @@ def build_volume(opts: BuildOptions) -> BuildResult:
 
         articles: list[tuple[Article, ArticleStub]] = []
         missing: list[MissingArticle] = []
+        progress.phase("Reading articles", total=len(records))
         for rec in records:
+            progress.advance()
             if not rec.ok:
                 if rec.resolution == "pending":
                     continue
@@ -156,7 +210,8 @@ def build_volume(opts: BuildOptions) -> BuildResult:
         for art, _ in articles:
             exprs.extend(_collect_math(art))
         if exprs:
-            math.prepare(exprs)
+            progress.phase("Typesetting mathematics", total=len(exprs))
+            math.prepare(exprs, on_progress=progress.advance)
             log.info("maths: %s", math.stats)
 
         # -- assets ------------------------------------------------------
@@ -173,13 +228,17 @@ def build_volume(opts: BuildOptions) -> BuildResult:
             placed.append((rule.order, rule.name, i, art))
         placed.sort(key=lambda t: (t[0], t[1], t[2]))
 
+        progress.phase("Fetching figures and rendering", total=len(placed))
         for order, (_ord, part, _i, art) in enumerate(placed):
             asset_bytes = _fetch_assets(fetcher, state, art)
+            progress.advance()
             builder.add_article(art, part=part, order=order, asset_bytes=asset_bytes)
         builder.missing = missing
 
+        progress.phase("Writing EPUB")
         epub_path = Path(opts.out)
         builder.write(epub_path)
+        progress.close()
 
         report_path = epub_path.with_suffix(".report.json")
         write_report(report_path, journal, opts, state, builder, fetcher, math)
