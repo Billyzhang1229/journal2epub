@@ -137,26 +137,59 @@ class EpubBuilder:
     # front matter
     # ------------------------------------------------------------------
     def _cover_svg(self) -> str:
+        """Compose the cover.
+
+        SVG text neither wraps nor shrinks: a title too wide for the canvas is
+        simply clipped. `GigaScience` fits at full size and `PLOS Computational
+        Biology` overflows by about 470px, so the title has to be wrapped and
+        scaled to the space rather than set at a fixed size and hoped for.
+        """
         t, j = self.theme, self.journal
-        title = esc(j.title)
+        MARGIN, W, H = 110, 1400, 2100
+        avail = W - MARGIN * 2
+
+        title_lines, title_size = fit_text(
+            j.title, avail, max_size=96, min_size=52, max_lines=3, spacing=6)
+        line_h = round(title_size * 1.14)
+
+        top = 320
+        title_svg = "".join(
+            f'\n  <text x="{MARGIN}" y="{top + i * line_h}" '
+            f'font-family="{esc(t.sans_stack)}" font-size="{title_size}" '
+            f'font-weight="700" letter-spacing="6" fill="{t.cover_fg}">{esc(line)}</text>'
+            for i, line in enumerate(title_lines))
+        rule_y = top + (len(title_lines) - 1) * line_h + 78
+
+        # The volume label is short but not bounded: "Volume 100, Issue 12" at
+        # 120px already nearly fills the width. Keep it on one line and let it
+        # shrink — breaking "Volume 100, Issue / 12" reads badly.
+        label_lines, label_size = fit_text(
+            self.label, avail, max_size=120, min_size=56, max_lines=1, spacing=0)
+        label_h = round(label_size * 1.12)
+        label_top = rule_y + 130
+        label_svg = "".join(
+            f'\n  <text x="{MARGIN}" y="{label_top + i * label_h}" '
+            f'font-family="{esc(t.sans_stack)}" font-size="{label_size}" '
+            f'font-weight="300" fill="{t.cover_fg}">{esc(line)}</text>'
+            for i, line in enumerate(label_lines))
+        count_y = label_top + (len(label_lines) - 1) * label_h + 118
+
+        n = len(self.articles)
         return f"""<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="2100"
-     viewBox="0 0 1400 2100" preserveAspectRatio="xMidYMid meet">
-  <rect width="1400" height="2100" fill="{t.cover_bg}"/>
-  <rect x="0" y="0" width="1400" height="26" fill="{t.cover_accent}"/>
-  <text x="110" y="360" font-family="{esc(t.sans_stack)}" font-size="96"
-        font-weight="700" letter-spacing="6" fill="{t.cover_fg}">{title}</text>
-  <line x1="110" y1="440" x2="1290" y2="440"
-        stroke="{t.cover_accent}" stroke-width="6"/>
-  <text x="110" y="580" font-family="{esc(t.sans_stack)}" font-size="120"
-        font-weight="300" fill="{t.cover_fg}">{esc(self.label)}</text>
-  <text x="110" y="700" font-family="{esc(t.sans_stack)}" font-size="46"
-        fill="{t.cover_accent}">{len(self.articles)} articles</text>
-  <text x="110" y="1900" font-family="{esc(t.sans_stack)}" font-size="38"
+<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}"
+     viewBox="0 0 {W} {H}" preserveAspectRatio="xMidYMid meet">
+  <title>{esc(j.title)} — {esc(self.label)}</title>
+  <rect width="{W}" height="{H}" fill="{t.cover_bg}"/>
+  <rect x="0" y="0" width="{W}" height="26" fill="{t.cover_accent}"/>{title_svg}
+  <line x1="{MARGIN}" y1="{rule_y}" x2="{W - MARGIN}" y2="{rule_y}"
+        stroke="{t.cover_accent}" stroke-width="6"/>{label_svg}
+  <text x="{MARGIN}" y="{count_y}" font-family="{esc(t.sans_stack)}" font-size="46"
+        fill="{t.cover_accent}">{n} article{'s' if n != 1 else ''}</text>
+  <text x="{MARGIN}" y="1900" font-family="{esc(t.sans_stack)}" font-size="38"
         fill="{t.cover_fg}" opacity="0.75">Offline reading edition</text>
-  <text x="110" y="1960" font-family="{esc(t.sans_stack)}" font-size="30"
+  <text x="{MARGIN}" y="1960" font-family="{esc(t.sans_stack)}" font-size="30"
         fill="{t.cover_fg}" opacity="0.55">Unofficial · independently produced</text>
-  <text x="110" y="2020" font-family="{esc(t.sans_stack)}" font-size="30"
+  <text x="{MARGIN}" y="2020" font-family="{esc(t.sans_stack)}" font-size="30"
         fill="{t.cover_fg}" opacity="0.55">Open-access articles under their own licences</text>
 </svg>
 """
@@ -474,6 +507,63 @@ original TeX as its accessible label.</p>
         tmp.replace(out_path)
         log.info("wrote %s (%.1f MB)", out_path, out_path.stat().st_size / 1e6)
         return out_path
+
+
+# Per-character advance widths as a fraction of font size, for a bold
+# grotesque. Approximate on purpose: no font is embedded and the reader's own
+# face is unknown, so this only has to be close enough to keep text inside the
+# canvas. It errs wide, which clips nothing.
+_NARROW = set("iljtfIrJ.,;:'!|()[]{}/\\-·")
+_WIDE = set("mwMW@%")
+
+
+def text_width(text: str, size: float, spacing: float = 0.0) -> float:
+    """Estimated rendered width of a single line, in user units."""
+    total = 0.0
+    for ch in text:
+        if ch == " ":
+            total += 0.30
+        elif ch in _NARROW:
+            total += 0.32
+        elif ch in _WIDE:
+            total += 0.90
+        elif ch.isupper() or ch.isdigit():
+            total += 0.68
+        else:
+            total += 0.57
+    return total * size + spacing * max(0, len(text) - 1)
+
+
+def wrap_text(text: str, size: float, spacing: float, max_width: float) -> list[str]:
+    """Greedy word wrap against the estimated width."""
+    lines: list[str] = []
+    current = ""
+    for word in text.split():
+        candidate = f"{current} {word}".strip()
+        if not current or text_width(candidate, size, spacing) <= max_width:
+            current = candidate
+        else:
+            lines.append(current)
+            current = word
+    if current:
+        lines.append(current)
+    return lines or [""]
+
+
+def fit_text(text: str, max_width: float, max_size: int, min_size: int,
+             max_lines: int, spacing: float = 0.0) -> tuple[list[str], int]:
+    """Largest size at which `text` wraps into at most `max_lines` lines.
+
+    Returns the wrapped lines and the size to set them at. If even `min_size`
+    will not fit — a pathologically long single word — the lines are returned
+    anyway at `min_size`, because a slightly wide cover beats no cover.
+    """
+    for size in range(int(max_size), int(min_size) - 1, -2):
+        lines = wrap_text(text, size, spacing, max_width)
+        if len(lines) <= max_lines and all(
+                text_width(l, size, spacing) <= max_width for l in lines):
+            return lines, size
+    return wrap_text(text, min_size, spacing, max_width), int(min_size)
 
 
 def _sum_stats(articles: list[EditionArticle]) -> RenderStats:

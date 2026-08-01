@@ -494,3 +494,63 @@ def test_null_progress_satisfies_the_protocol():
     n = NullProgress()
     assert isinstance(n, Progress)
     n.phase("x", total=1); n.advance(); n.note("y"); n.close()
+
+
+# -- cover text fitting ------------------------------------------------
+
+@pytest.mark.parametrize("title", [
+    "GigaScience",
+    "PLOS Computational Biology",
+    "PLOS Neglected Tropical Diseases",
+    "Journal of the American Medical Informatics Association",
+    "Proceedings of the National Academy of Sciences of the United States of America",
+    "Nature",
+])
+def test_cover_titles_are_fitted_not_clipped(title):
+    """SVG text neither wraps nor shrinks, so a title wider than the canvas is
+    silently cut off — which is how 'PLOS Computational Biology' became
+    'PLOS Computational Biol' on the cover."""
+    from journal2epub.render.epub import fit_text, text_width
+    avail = 1400 - 110 * 2
+    lines, size = fit_text(title, avail, max_size=96, min_size=52, max_lines=3, spacing=6)
+    assert lines and all(l.strip() for l in lines)
+    assert " ".join(lines) == title, "wrapping must not lose or reorder words"
+    for line in lines:
+        assert text_width(line, size, 6) <= avail, f"{line!r} at {size}px exceeds {avail}px"
+
+
+def test_cover_volume_label_stays_on_one_line():
+    """'Volume 100, Issue / 12' reads badly; shrink instead of wrapping."""
+    from journal2epub.render.epub import fit_text, text_width
+    avail = 1400 - 110 * 2
+    for label in ("Volume 12", "Volume 22, Issue 5", "Volume 2026, Issue 12"):
+        lines, size = fit_text(label, avail, max_size=120, min_size=56, max_lines=1)
+        assert len(lines) == 1, f"{label!r} wrapped to {lines}"
+        assert text_width(lines[0], size) <= avail
+
+
+def test_width_estimate_is_close_to_measured_rendering():
+    """The estimate feeds the fit, so it must not be wildly optimistic. These
+    figures were measured from the real SVG rendering in a browser."""
+    from journal2epub.render.epub import text_width
+    for text, size, spacing, measured in [
+        ("PLOS Computational", 96, 6, 1068),
+        ("Biology", 96, 6, 385),
+        ("Volume 22, Issue 5", 120, 0, 962),
+    ]:
+        est = text_width(text, size, spacing)
+        ratio = est / measured
+        assert 0.88 <= ratio <= 1.20, (
+            f"{text!r}: estimated {est:.0f} vs measured {measured} ({ratio:.2f}x)")
+
+
+def test_cover_svg_contains_the_whole_title(journal, theme, tmp_path):
+    from journal2epub.render.epub import EpubBuilder
+    b = EpubBuilder(journal=load_journal("plos-computational-biology"),
+                    theme=load_theme("plos"), volume="22", issue="5",
+                    math=MathRenderer(cache_dir=tmp_path / "m"))
+    svg = b._cover_svg()
+    import re
+    rendered = " ".join(re.findall(r"<text[^>]*>([^<]*)</text>", svg))
+    assert "PLOS Computational" in rendered and "Biology" in rendered
+    assert "Volume 22, Issue 5" in rendered
